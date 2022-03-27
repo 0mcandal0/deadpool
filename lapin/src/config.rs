@@ -45,6 +45,9 @@ pub struct Config {
     /// Connection properties.
     #[cfg_attr(feature = "serde", serde(skip))]
     pub connection_properties: lapin::ConnectionProperties,
+
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub cert_chain: Option<String>,
 }
 
 pub(crate) struct ConnProps<'a>(pub(crate) &'a lapin::ConnectionProperties);
@@ -98,7 +101,9 @@ impl Config {
             Some(Runtime::AsyncStd1) => conn_props.with_executor(async_executor_trait::AsyncStd),
         };
 
-        let mut builder = Pool::builder(Manager::new(url, conn_props)).config(pool_config);
+        let cert_chain = self.cert_chain.clone();
+
+        let mut builder = Pool::builder(Manager::new(url, conn_props, cert_chain)).config(pool_config);
 
         if let Some(runtime) = runtime {
             builder = builder.runtime(runtime)

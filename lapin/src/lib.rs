@@ -23,7 +23,7 @@
 mod config;
 
 use deadpool::{async_trait, managed};
-use lapin::{ConnectionProperties, Error};
+use lapin::{ConnectionProperties, Error, tcp::OwnedTLSConfig};
 
 pub use lapin;
 
@@ -50,6 +50,7 @@ type RecycleError = managed::RecycleError<Error>;
 pub struct Manager {
     addr: String,
     connection_properties: ConnectionProperties,
+    cert_chain: Option<String>,
 }
 
 impl std::fmt::Debug for Manager {
@@ -68,10 +69,11 @@ impl Manager {
     /// Creates a new [`Manager`] using the given AMQP address and
     /// [`lapin::ConnectionProperties`].
     #[must_use]
-    pub fn new<S: Into<String>>(addr: S, connection_properties: ConnectionProperties) -> Self {
+    pub fn new<S: Into<String>>(addr: S, connection_properties: ConnectionProperties, cert_chain: Option<String>) -> Self {
         Self {
             addr: addr.into(),
             connection_properties,
+            cert_chain,
         }
     }
 }
@@ -82,8 +84,15 @@ impl managed::Manager for Manager {
     type Error = Error;
 
     async fn create(&self) -> Result<lapin::Connection, Error> {
+
+        let tlsconfig = OwnedTLSConfig {
+            identity : None,
+            cert_chain: self.cert_chain.clone()
+        };
+
         let conn =
-            lapin::Connection::connect(self.addr.as_str(), self.connection_properties.clone())
+            lapin::Connection::connect_with_config(self.addr.as_str(),self.connection_properties.clone(), tlsconfig )
+            //lapin::Connection::connect(self.addr.as_str(), self.connection_properties.clone())
                 .await?;
         Ok(conn)
     }
