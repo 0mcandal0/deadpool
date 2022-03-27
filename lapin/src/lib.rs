@@ -22,10 +22,13 @@
 
 mod config;
 
+use std::fs;
+
 use deadpool::{async_trait, managed};
 use lapin::{ConnectionProperties, Error, tcp::{TLSConfig, AMQPUriTcpExt, NativeTlsConnector}, uri::AMQPUri};
 
 pub use lapin;
+use native_tls::Certificate;
 
 pub use self::config::{Config, ConfigError};
 
@@ -78,19 +81,23 @@ impl managed::Manager for Manager {
 
         let conn;
         if let Some(cert_chain) = &self.cert_chain {
-            tls.cert_chain = Some(cert_chain.as_str());
+            //tls.cert_chain = Some(cert_chain.as_str());
+            
+            let ca_cert = fs::read(cert_chain).unwrap();
+            let root_cert = Certificate::from_pem(&ca_cert).unwrap(); 
+            let uri = self.addr.as_str().parse::<AMQPUri>().unwrap();
+            let res = uri.connect().and_then(|stream| {
+                stream.into_native_tls(NativeTlsConnector::builder()
+                .danger_accept_invalid_certs(true)
+                .add_root_certificate(root_cert).build().expect("TLS configuration failed"), &uri.authority.host)
+            });
+            conn = lapin::Connection::connector(self.connection_properties.clone())(uri, res).await?;
+        }
+        else {
             conn =
                 lapin::Connection::connect_with_config(self.addr.as_str(), self.connection_properties.clone(), tls )
             //lapin::Connection::connect(self.addr.as_str(), self.connection_properties.clone())
                 .await?;
-        } else {
-            let uri = self.addr.as_str().parse::<AMQPUri>().unwrap();
-            let res = uri.connect().and_then(|stream| {
-                let mut tls_builder = NativeTlsConnector::builder();
-                tls_builder.danger_accept_invalid_certs(true);
-                stream.into_native_tls(tls_builder.build().expect("TLS configuration failed"), &uri.authority.host)
-            });
-            conn = lapin::Connection::connector(self.connection_properties.clone())(uri, res).await?;
         }
         Ok(conn)
     }

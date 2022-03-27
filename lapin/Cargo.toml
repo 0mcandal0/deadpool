@@ -26,6 +26,7 @@ deadpool = { path = "../", version = "0.9.0", default-features = false, features
 lapin = { version = "1.0", default-features = false }
 serde_1 = { package = "serde", version = "1.0.103", features = ["derive"], optional = true }
 tokio-amqp = { version = "1.0", optional = true }
+native-tls="0.2.8"
 
 [dev-dependencies]
 config = { version = "0.11", default-features = false }
