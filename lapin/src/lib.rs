@@ -83,7 +83,8 @@ impl managed::Manager for Manager {
         if let Some(cert_chain) = &self.cert_chain {
             //tls.cert_chain = Some(cert_chain.as_str());
             
-            let ca_cert = fs::read(cert_chain).unwrap();
+            // let ca_cert = fs::read(cert_chain).unwrap();
+            let ca_cert = cert_chain.as_bytes();
             let root_cert = Certificate::from_pem(&ca_cert).unwrap(); 
             let uri = self.addr.as_str().parse::<AMQPUri>().unwrap();
             let res = uri.connect().and_then(|stream| {
