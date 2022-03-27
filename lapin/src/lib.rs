@@ -23,7 +23,7 @@
 mod config;
 
 use deadpool::{async_trait, managed};
-use lapin::{ConnectionProperties, Error, tcp::TLSConfig};
+use lapin::{ConnectionProperties, Error, tcp::{TLSConfig, AMQPUriTcpExt, NativeTlsConnector}, uri::AMQPUri};
 
 pub use lapin;
 
@@ -76,14 +76,22 @@ impl managed::Manager for Manager {
 
         let mut tls = TLSConfig::default();
 
+        let conn;
         if let Some(cert_chain) = &self.cert_chain {
             tls.cert_chain = Some(cert_chain.as_str());
-        }
-
-        let conn =
-            lapin::Connection::connect_with_config(self.addr.as_str(), self.connection_properties.clone(), tls )
+            conn =
+                lapin::Connection::connect_with_config(self.addr.as_str(), self.connection_properties.clone(), tls )
             //lapin::Connection::connect(self.addr.as_str(), self.connection_properties.clone())
                 .await?;
+        } else {
+            let uri = self.addr.as_str().parse::<AMQPUri>().unwrap();
+            let res = uri.connect().and_then(|stream| {
+                let mut tls_builder = NativeTlsConnector::builder();
+                tls_builder.danger_accept_invalid_certs(true);
+                stream.into_native_tls(tls_builder.build().expect("TLS configuration failed"), &uri.authority.host)
+            });
+            conn = lapin::Connection::connector(self.connection_properties.clone())(uri, res).await?;
+        }
         Ok(conn)
     }
 
@@ -96,4 +104,6 @@ impl managed::Manager for Manager {
             ))),
         }
     }
+
+
 }
